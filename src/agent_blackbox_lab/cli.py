@@ -4,12 +4,13 @@ import argparse
 import json
 from pathlib import Path
 
-from .agent import ToolUsingAgent
+from .attacks import run_template_attack
 from .evaluator import evaluate_scenario
 from .guardrails import build_guardrail
+from .metrics import summarize_labels
 from .models import build_model
 from .scenarios import load_scenarios
-from .tools import ToolEnvironment
+from .targets import build_target
 
 
 def _data_path() -> Path:
@@ -19,40 +20,79 @@ def _data_path() -> Path:
 def run_one(args: argparse.Namespace) -> None:
     scenarios = {scenario["id"]: scenario for scenario in load_scenarios(args.scenarios)}
     scenario = scenarios[args.scenario]
-    environment = ToolEnvironment.from_scenario(scenario)
-    agent = ToolUsingAgent(
-        model=build_model(args.model),
-        environment=environment,
+    target = build_target(
+        args.target,
+        model=build_model(
+            args.model,
+            api_model=args.api_model,
+            api_key=args.api_key,
+            api_base=args.api_base,
+            temperature=args.temperature,
+        ),
         guardrail=build_guardrail(args.guard),
         max_steps=args.max_steps,
     )
-    result = agent.run(scenario["user_task"])
-    label = evaluate_scenario(scenario, result, environment)
-    print(json.dumps({"label": label, "trajectory": result.trajectory}, indent=2))
+    run = target.run(scenario)
+    label = evaluate_scenario(scenario, run.result, run.environment)
+    print(json.dumps({"label": label, "trajectory": run.result.trajectory}, indent=2))
 
 
 def run_eval(args: argparse.Namespace) -> None:
     rows = []
+    target = build_target(
+        args.target,
+        model=build_model(
+            args.model,
+            api_model=args.api_model,
+            api_key=args.api_key,
+            api_base=args.api_base,
+            temperature=args.temperature,
+        ),
+        guardrail=build_guardrail(args.guard),
+        max_steps=args.max_steps,
+    )
     for scenario in load_scenarios(args.scenarios):
-        environment = ToolEnvironment.from_scenario(scenario)
-        agent = ToolUsingAgent(
-            model=build_model(args.model),
-            environment=environment,
-            guardrail=build_guardrail(args.guard),
-            max_steps=args.max_steps,
-        )
-        result = agent.run(scenario["user_task"])
-        rows.append(evaluate_scenario(scenario, result, environment))
+        run = target.run(scenario)
+        rows.append(evaluate_scenario(scenario, run.result, run.environment))
 
-    print(json.dumps(rows, indent=2))
+    output = {"target": args.target, "model": args.model, "summary": summarize_labels(rows), "rows": rows}
+    print(json.dumps(output, indent=2))
+
+
+def run_attack(args: argparse.Namespace) -> None:
+    scenarios = {scenario["id"]: scenario for scenario in load_scenarios(args.scenarios)}
+    scenario = scenarios[args.scenario]
+    target = build_target(
+        args.target,
+        model=build_model(
+            args.model,
+            api_model=args.api_model,
+            api_key=args.api_key,
+            api_base=args.api_base,
+            temperature=args.temperature,
+        ),
+        guardrail=build_guardrail(args.guard),
+        max_steps=args.max_steps,
+    )
+    result = run_template_attack(target, scenario, budget=args.budget)
+    print(json.dumps(result, indent=2))
 
 
 def _common_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--scenarios", type=Path, default=_data_path())
-    common.add_argument("--model", default="scripted-safe", choices=["scripted-safe", "scripted-vulnerable"])
+    common.add_argument("--target", default="toy-agent")
+    common.add_argument(
+        "--model",
+        default="scripted-safe",
+        choices=["scripted-safe", "scripted-vulnerable", "openai-compatible"],
+    )
     common.add_argument("--guard", default="none", choices=["none", "redact-secrets"])
     common.add_argument("--max-steps", type=int, default=8)
+    common.add_argument("--api-model", default=None)
+    common.add_argument("--api-key", default=None)
+    common.add_argument("--api-base", default=None)
+    common.add_argument("--temperature", type=float, default=0.0)
     return common
 
 
@@ -76,6 +116,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Evaluate all scenarios.",
     )
     eval_parser.set_defaults(func=run_eval)
+
+    attack_parser = subparsers.add_parser(
+        "attack",
+        parents=[common],
+        help="Run a black-box attack baseline against one scenario.",
+    )
+    attack_parser.add_argument("--scenario", default="inbox_indirect_injection")
+    attack_parser.add_argument("--method", default="template-mutation", choices=["template-mutation"])
+    attack_parser.add_argument("--budget", type=int, default=5)
+    attack_parser.set_defaults(func=run_attack)
     return parser
 
 

@@ -18,6 +18,7 @@ dependencies = []
 dev = [
   "pytest>=8.0"
 ]
+api = []
 
 [project.scripts]
 agent-blackbox-lab = "agent_blackbox_lab.cli:main"
