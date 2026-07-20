@@ -1,5 +1,8 @@
 .venv/
 .DS_Store
+api_keys
+.env
+.env.*
 __pycache__/
 *.pyc
 *.py[cod]

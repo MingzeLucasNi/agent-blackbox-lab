@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from agent_blackbox_lab.agent import ToolUsingAgent
 from agent_blackbox_lab.attacks import run_template_attack
+from agent_blackbox_lab.config import load_key_file, qwen_defaults
 from agent_blackbox_lab.evaluator import evaluate_scenario
 from agent_blackbox_lab.guardrails import build_guardrail
 from agent_blackbox_lab.models import build_model
@@ -112,3 +113,17 @@ def test_template_attack_finds_dual_success_on_vulnerable_target() -> None:
     assert result["queries"] == 3
     assert result["best"]["label"]["attack_success"] is True
     assert result["best"]["label"]["task_success"] is True
+
+
+def test_load_raw_key_file_sets_dashscope_env(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("DASHSCOPE_API_KEY", raising=False)
+    monkeypatch.delenv("MODEL_API_KEY", raising=False)
+    key_file = tmp_path / "api_keys"
+    key_file.write_text("sk-test\n", encoding="utf-8")
+
+    load_key_file(key_file)
+    model, key, base = qwen_defaults(None, None, None)
+
+    assert model
+    assert key == "sk-test"
+    assert "dashscope" in base

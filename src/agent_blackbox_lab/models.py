@@ -100,7 +100,7 @@ class OpenAICompatibleChatModel(ModelPolicy):
     ) -> None:
         self.model_name = model_name
         self.api_key = api_key
-        self.api_base = api_base
+        self.api_base = self._normalize_api_base(api_base)
         self.temperature = temperature
         self.timeout = timeout
 
@@ -143,6 +143,14 @@ class OpenAICompatibleChatModel(ModelPolicy):
             else:
                 serialized.append({"role": role, "content": str(message.get("content", ""))})
         return serialized
+
+    def _normalize_api_base(self, api_base: str) -> str:
+        cleaned = api_base.rstrip("/")
+        if cleaned.endswith("/chat/completions"):
+            return cleaned
+        if cleaned.endswith("/v1"):
+            return f"{cleaned}/chat/completions"
+        return cleaned
 
     def _post(self, payload: dict[str, Any]) -> dict[str, Any]:
         request = urllib.request.Request(

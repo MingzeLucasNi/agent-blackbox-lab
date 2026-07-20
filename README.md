@@ -69,6 +69,25 @@ export MODEL_NAME="your-model-name"
 python -m agent_blackbox_lab eval --target toy-agent --model openai-compatible
 ```
 
+For Qwen / DashScope, put your key in `api_keys` or export
+`DASHSCOPE_API_KEY`. The file can be either a raw single-line key or
+`KEY=value` entries. It is ignored by Git.
+
+```bash
+python -m agent_blackbox_lab smoke \
+  --target toy-agent \
+  --model openai-compatible \
+  --provider qwen \
+  --key-file api_keys
+
+python -m agent_blackbox_lab run \
+  --target toy-agent \
+  --model openai-compatible \
+  --provider qwen \
+  --key-file api_keys \
+  --scenario inbox_indirect_injection
+```
+
 For local OpenAI-compatible servers:
 
 ```bash
